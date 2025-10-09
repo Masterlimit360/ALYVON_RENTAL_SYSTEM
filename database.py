@@ -39,6 +39,9 @@ class Customer(Base):
     phone = Column(String)
     email = Column(String)
     address = Column(String)
+    customer_type = Column(String, default="Regular")  # Regular, Reseller, VIP
+    discount_percentage = Column(Float, default=0.0)  # Discount for resellers
+    notes = Column(String)  # Additional notes about customer
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

@@ -6,6 +6,7 @@ from tkinter import ttk, messagebox, simpledialog
 from datetime import datetime, date, timedelta
 from database import SessionLocal, Item, Customer, Rental, init_database
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from PIL import Image, ImageTk
 import os
 
@@ -18,9 +19,12 @@ class RentalManagerApp:
         
         # Set window icon
         try:
-            self.root.iconbitmap("ALYVON logo.png")
+            self.root.iconbitmap("ALYVON logo.ico")
         except:
-            pass
+            try:
+                self.root.iconbitmap("ALYVON logo.png")
+            except:
+                pass
         
         # Initialize database
         init_database()
@@ -66,12 +70,24 @@ class RentalManagerApp:
         self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
         
         # Create tabs
-        self.create_dashboard_tab()
-        self.create_rental_tab()
-        self.create_inventory_tab()
-        self.create_customers_tab()
-        self.create_reports_tab()
-        self.create_history_tab()
+        try:
+            self.create_dashboard_tab()
+            self.create_rental_tab()
+            self.create_inventory_tab()
+            self.create_customers_tab()
+            self.create_rentals_tab()
+            self.create_reports_tab()
+            self.create_history_tab()
+            
+            # Load initial data
+            self.refresh_dashboard()
+            self.refresh_inventory()
+            self.refresh_rentals()
+            self.refresh_customers()
+            self.refresh_history()
+        except Exception as e:
+            print(f"Application initialization error: {e}")
+            messagebox.showerror("Error", f"Failed to initialize application: {e}")
         
     def create_dashboard_tab(self):
         """Create dashboard tab"""
@@ -86,26 +102,22 @@ class RentalManagerApp:
         summary_frame = tk.Frame(dashboard_frame, bg='white', relief='raised', bd=2)
         summary_frame.pack(fill='x', padx=20, pady=10)
         
-        # Get summary data
-        db = SessionLocal()
-        try:
-            total_items = db.query(Item).count()
-            total_customers = db.query(Customer).count()
-            active_rentals = db.query(Rental).filter(Rental.is_returned == False).count()
-            total_rentals = db.query(Rental).count()
-            
-            tk.Label(summary_frame, text=f"Total Items: {total_items}", 
-                    font=("Arial", 12), bg='white').pack(anchor='w', padx=10, pady=5)
-            tk.Label(summary_frame, text=f"Total Customers: {total_customers}", 
-                    font=("Arial", 12), bg='white').pack(anchor='w', padx=10, pady=5)
-            tk.Label(summary_frame, text=f"Active Rentals: {active_rentals}", 
-                    font=("Arial", 12), bg='white').pack(anchor='w', padx=10, pady=5)
-            tk.Label(summary_frame, text=f"Total Rentals: {total_rentals}", 
-                    font=("Arial", 12), bg='white').pack(anchor='w', padx=10, pady=5)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load dashboard data: {e}")
-        finally:
-            db.close()
+        # Create summary labels as instance variables for refresh
+        self.total_items_label = tk.Label(summary_frame, text="Total Items: 0", 
+                font=("Arial", 12), bg='white')
+        self.total_items_label.pack(anchor='w', padx=10, pady=5)
+        
+        self.total_customers_label = tk.Label(summary_frame, text="Total Customers: 0", 
+                font=("Arial", 12), bg='white')
+        self.total_customers_label.pack(anchor='w', padx=10, pady=5)
+        
+        self.active_rentals_label = tk.Label(summary_frame, text="Active Rentals: 0", 
+                font=("Arial", 12), bg='white')
+        self.active_rentals_label.pack(anchor='w', padx=10, pady=5)
+        
+        self.total_revenue_label = tk.Label(summary_frame, text="Total Revenue: GHS 0.00", 
+                font=("Arial", 12), bg='white')
+        self.total_revenue_label.pack(anchor='w', padx=10, pady=5)
             
         # Refresh button
         tk.Button(dashboard_frame, text="Refresh Dashboard", 
@@ -121,17 +133,47 @@ class RentalManagerApp:
                                      font=("Arial", 12, "bold"))
         customer_frame.pack(fill='x', padx=10, pady=5)
         
-        tk.Label(customer_frame, text="Customer Name:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
+        # Customer selection method
+        selection_frame = tk.Frame(customer_frame)
+        selection_frame.pack(fill='x', padx=5, pady=5)
+        
+        tk.Label(selection_frame, text="Select Customer:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
+        self.customer_selection_var = tk.StringVar()
+        self.customer_combo = ttk.Combobox(selection_frame, textvariable=self.customer_selection_var, 
+                                         width=30, state='readonly')
+        self.customer_combo.grid(row=0, column=1, padx=5, pady=5)
+        self.customer_combo.bind('<<ComboboxSelected>>', self.on_customer_selected)
+        
+        tk.Button(selection_frame, text="New Customer", command=self.create_new_customer, 
+                 bg='#3498db', fg='white').grid(row=0, column=2, padx=5, pady=5)
+        
+        # Customer details (auto-filled when customer selected)
+        details_frame = tk.Frame(customer_frame)
+        details_frame.pack(fill='x', padx=5, pady=5)
+        
+        tk.Label(details_frame, text="Name:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
         self.customer_name_var = tk.StringVar()
-        tk.Entry(customer_frame, textvariable=self.customer_name_var, width=30).grid(row=0, column=1, padx=5, pady=5)
+        tk.Entry(details_frame, textvariable=self.customer_name_var, width=30).grid(row=0, column=1, padx=5, pady=5)
         
-        tk.Label(customer_frame, text="Phone:").grid(row=0, column=2, sticky='w', padx=5, pady=5)
+        tk.Label(details_frame, text="Phone:").grid(row=0, column=2, sticky='w', padx=5, pady=5)
         self.customer_phone_var = tk.StringVar()
-        tk.Entry(customer_frame, textvariable=self.customer_phone_var, width=20).grid(row=0, column=3, padx=5, pady=5)
+        tk.Entry(details_frame, textvariable=self.customer_phone_var, width=20).grid(row=0, column=3, padx=5, pady=5)
         
-        tk.Label(customer_frame, text="Address:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
+        tk.Label(details_frame, text="Address:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
         self.customer_address_var = tk.StringVar()
-        tk.Entry(customer_frame, textvariable=self.customer_address_var, width=50).grid(row=1, column=1, columnspan=3, sticky='ew', padx=5, pady=5)
+        tk.Entry(details_frame, textvariable=self.customer_address_var, width=50).grid(row=1, column=1, columnspan=3, sticky='ew', padx=5, pady=5)
+        
+        tk.Label(details_frame, text="Customer Type:").grid(row=2, column=0, sticky='w', padx=5, pady=5)
+        self.customer_type_var = tk.StringVar(value="Regular")
+        type_combo = ttk.Combobox(details_frame, textvariable=self.customer_type_var, 
+                                 values=["Regular", "Reseller", "VIP"], width=15, state='readonly')
+        type_combo.grid(row=2, column=1, padx=5, pady=5)
+        type_combo.bind('<<ComboboxSelected>>', self.on_customer_type_changed)
+        
+        tk.Label(details_frame, text="Discount %:").grid(row=2, column=2, sticky='w', padx=5, pady=5)
+        self.discount_var = tk.StringVar(value="0")
+        tk.Entry(details_frame, textvariable=self.discount_var, width=10).grid(row=2, column=3, padx=5, pady=5)
+        self.discount_var.trace('w', self.calculate_total)
         
         # Item selection for multiple items
         item_frame = tk.LabelFrame(rental_frame, text="Add Items to Rental", 
@@ -204,8 +246,119 @@ class RentalManagerApp:
         tk.Button(button_frame, text="Clear Form", command=self.clear_rental_form, 
                  bg='#e74c3c', fg='white', font=("Arial", 12, "bold")).pack(side='left', padx=5)
         
-        # Load items
+        # Load items and customers
         self.load_items()
+        self.load_customers()
+    
+    def load_customers(self):
+        """Load customers into the combo box"""
+        try:
+            db = SessionLocal()
+            customers = db.query(Customer).all()
+            customer_names = [f"{customer.name} ({customer.customer_type})" for customer in customers]
+            self.customer_combo['values'] = customer_names
+        except Exception as e:
+            print(f"Customer loading error: {e}")
+            # Don't show error message for missing combo box
+        finally:
+            if 'db' in locals():
+                db.close()
+    
+    def on_customer_selected(self, event):
+        """Handle customer selection"""
+        selected = self.customer_combo.get()
+        if selected:
+            customer_name = selected.split(' (')[0]
+            db = SessionLocal()
+            try:
+                customer = db.query(Customer).filter(Customer.name == customer_name).first()
+                if customer:
+                    self.customer_name_var.set(customer.name)
+                    self.customer_phone_var.set(customer.phone or "")
+                    self.customer_address_var.set(customer.address or "")
+                    self.customer_type_var.set(customer.customer_type)
+                    self.discount_var.set(str(customer.discount_percentage))
+                    self.calculate_total()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load customer details: {e}")
+            finally:
+                db.close()
+    
+    def on_customer_type_changed(self, event):
+        """Handle customer type change"""
+        customer_type = self.customer_type_var.get()
+        if customer_type == "Reseller":
+            self.discount_var.set("10")  # Default 10% discount for resellers
+        elif customer_type == "VIP":
+            self.discount_var.set("15")  # Default 15% discount for VIP
+        else:
+            self.discount_var.set("0")   # No discount for regular customers
+        self.calculate_total()
+    
+    def create_new_customer(self):
+        """Create a new customer"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Add New Customer")
+        dialog.geometry("500x400")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Form fields
+        tk.Label(dialog, text="Customer Name:").pack(pady=5)
+        name_var = tk.StringVar()
+        tk.Entry(dialog, textvariable=name_var, width=40).pack(pady=5)
+        
+        tk.Label(dialog, text="Phone:").pack(pady=5)
+        phone_var = tk.StringVar()
+        tk.Entry(dialog, textvariable=phone_var, width=40).pack(pady=5)
+        
+        tk.Label(dialog, text="Email:").pack(pady=5)
+        email_var = tk.StringVar()
+        tk.Entry(dialog, textvariable=email_var, width=40).pack(pady=5)
+        
+        tk.Label(dialog, text="Address:").pack(pady=5)
+        address_var = tk.StringVar()
+        tk.Entry(dialog, textvariable=address_var, width=40).pack(pady=5)
+        
+        tk.Label(dialog, text="Customer Type:").pack(pady=5)
+        type_var = tk.StringVar(value="Regular")
+        type_combo = ttk.Combobox(dialog, textvariable=type_var, 
+                                 values=["Regular", "Reseller", "VIP"], width=37, state='readonly')
+        type_combo.pack(pady=5)
+        
+        tk.Label(dialog, text="Discount Percentage:").pack(pady=5)
+        discount_var = tk.StringVar(value="0")
+        tk.Entry(dialog, textvariable=discount_var, width=40).pack(pady=5)
+        
+        tk.Label(dialog, text="Notes:").pack(pady=5)
+        notes_var = tk.StringVar()
+        tk.Entry(dialog, textvariable=notes_var, width=40).pack(pady=5)
+        
+        def save_customer():
+            try:
+                db = SessionLocal()
+                customer = Customer(
+                    name=name_var.get(),
+                    phone=phone_var.get(),
+                    email=email_var.get(),
+                    address=address_var.get(),
+                    customer_type=type_var.get(),
+                    discount_percentage=float(discount_var.get()),
+                    notes=notes_var.get()
+                )
+                db.add(customer)
+                db.commit()
+                messagebox.showinfo("Success", "Customer added successfully")
+                dialog.destroy()
+                self.load_customers()
+                self.refresh_customers()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to add customer: {e}")
+            finally:
+                db.close()
+        
+        tk.Button(dialog, text="Save Customer", command=save_customer).pack(pady=10)
+        tk.Button(dialog, text="Cancel", command=dialog.destroy).pack(pady=5)
     
     def create_inventory_tab(self):
         """Create inventory management tab"""
@@ -227,12 +380,27 @@ class RentalManagerApp:
         self.inventory_tree.pack(side='left', fill='both', expand=True, padx=10, pady=10)
         inventory_scrollbar.pack(side='right', fill='y')
         
+        # Search and filter frame
+        search_frame = tk.Frame(inventory_frame)
+        search_frame.pack(fill='x', padx=10, pady=5)
+        
+        tk.Label(search_frame, text="Search Items:").pack(side='left', padx=5)
+        self.search_var = tk.StringVar()
+        self.search_var.trace('w', self.filter_inventory)
+        tk.Entry(search_frame, textvariable=self.search_var, width=30).pack(side='left', padx=5)
+        
+        tk.Button(search_frame, text="Clear Search", command=self.clear_search).pack(side='left', padx=5)
+        
         # Buttons
         button_frame = tk.Frame(inventory_frame)
         button_frame.pack(fill='x', padx=10, pady=5)
         
         tk.Button(button_frame, text="Refresh Inventory", command=self.refresh_inventory).pack(side='left', padx=5)
         tk.Button(button_frame, text="Add New Item", command=self.add_new_item).pack(side='left', padx=5)
+        tk.Button(button_frame, text="Edit Selected Item", command=self.edit_selected_item, 
+                 bg='#f39c12', fg='white').pack(side='left', padx=5)
+        tk.Button(button_frame, text="Delete Selected Item", command=self.delete_selected_item, 
+                 bg='#e74c3c', fg='white').pack(side='left', padx=5)
         
         # Load inventory
         self.refresh_inventory()
@@ -243,7 +411,7 @@ class RentalManagerApp:
         self.notebook.add(customers_frame, text="Customers")
         
         # Customers tree
-        columns = ('ID', 'Name', 'Phone', 'Email', 'Address', 'Created')
+        columns = ('ID', 'Name', 'Type', 'Phone', 'Email', 'Address', 'Discount %', 'Created')
         self.customers_tree = ttk.Treeview(customers_frame, columns=columns, show='headings', height=15)
         
         for col in columns:
@@ -262,9 +430,48 @@ class RentalManagerApp:
         button_frame.pack(fill='x', padx=10, pady=5)
         
         tk.Button(button_frame, text="Refresh Customers", command=self.refresh_customers).pack(side='left', padx=5)
+        tk.Button(button_frame, text="Add New Customer", command=self.create_new_customer).pack(side='left', padx=5)
+        tk.Button(button_frame, text="Edit Selected Customer", command=self.edit_selected_customer, 
+                 bg='#f39c12', fg='white').pack(side='left', padx=5)
+        tk.Button(button_frame, text="Delete Selected Customer", command=self.delete_selected_customer, 
+                 bg='#e74c3c', fg='white').pack(side='left', padx=5)
         
         # Load customers
         self.refresh_customers()
+    
+    def create_rentals_tab(self):
+        """Create active rentals management tab"""
+        rentals_frame = ttk.Frame(self.notebook)
+        self.notebook.add(rentals_frame, text="Active Rentals")
+        
+        # Rentals title
+        tk.Label(rentals_frame, text="Active Rentals Management", font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Rentals tree
+        columns = ('ID', 'Customer', 'Items', 'Start Date', 'Return Date', 'Amount (GHS)')
+        self.rentals_tree = ttk.Treeview(rentals_frame, columns=columns, show='headings', height=15)
+        
+        for col in columns:
+            self.rentals_tree.heading(col, text=col)
+            self.rentals_tree.column(col, width=120)
+        
+        # Scrollbar
+        rentals_scrollbar = ttk.Scrollbar(rentals_frame, orient='vertical', command=self.rentals_tree.yview)
+        self.rentals_tree.configure(yscrollcommand=rentals_scrollbar.set)
+        
+        self.rentals_tree.pack(side='left', fill='both', expand=True, padx=10, pady=10)
+        rentals_scrollbar.pack(side='right', fill='y')
+        
+        # Buttons
+        button_frame = tk.Frame(rentals_frame)
+        button_frame.pack(fill='x', padx=10, pady=5)
+        
+        tk.Button(button_frame, text="Refresh Rentals", command=self.refresh_rentals).pack(side='left', padx=5)
+        tk.Button(button_frame, text="Mark as Returned", command=self.mark_as_returned, 
+                 bg='#27ae60', fg='white').pack(side='left', padx=5)
+        
+        # Load rentals
+        self.refresh_rentals()
     
     def create_reports_tab(self):
         """Create reports tab"""
@@ -422,9 +629,10 @@ class RentalManagerApp:
             self.items_listbox.insert(tk.END, display_text)
     
     def calculate_total(self, *args):
-        """Calculate total rental amount"""
+        """Calculate total rental amount with customer discount"""
         try:
             days = int(self.days_var.get()) if self.days_var.get() else 0
+            discount = float(self.discount_var.get()) if self.discount_var.get() else 0
             total = 0
             
             for rental_item in self.rental_items:
@@ -432,7 +640,15 @@ class RentalManagerApp:
                 quantity = rental_item['quantity']
                 total += item.daily_rate * quantity * days
             
-            self.total_amount_var.set(f"GHS {total:.2f}")
+            # Apply discount
+            discount_amount = total * (discount / 100)
+            final_total = total - discount_amount
+            
+            # Display with discount breakdown
+            if discount > 0:
+                self.total_amount_var.set(f"GHS {final_total:.2f} (Discount: {discount}% = GHS {discount_amount:.2f})")
+            else:
+                self.total_amount_var.set(f"GHS {final_total:.2f}")
         except:
             self.total_amount_var.set("GHS 0.00")
     
@@ -461,13 +677,22 @@ class RentalManagerApp:
                     customer = Customer(
                         name=self.customer_name_var.get(),
                         phone=self.customer_phone_var.get(),
-                        address=self.customer_address_var.get()
+                        address=self.customer_address_var.get(),
+                        customer_type=self.customer_type_var.get(),
+                        discount_percentage=float(self.discount_var.get())
                     )
                     db.add(customer)
                     db.flush()
+                else:
+                    # Update existing customer if details changed
+                    customer.phone = self.customer_phone_var.get()
+                    customer.address = self.customer_address_var.get()
+                    customer.customer_type = self.customer_type_var.get()
+                    customer.discount_percentage = float(self.discount_var.get())
                 
                 # Create rental for each item
                 total_amount = 0
+                discount = float(self.discount_var.get())
                 start_date = datetime.strptime(self.start_date_var.get(), '%Y-%m-%d').date()
                 return_date = start_date + timedelta(days=days)
                 
@@ -480,6 +705,11 @@ class RentalManagerApp:
                         messagebox.showerror("Error", f"Not enough {item.name} available. Only {item.available_quantity} available")
                         return
                     
+                    # Calculate item total with discount
+                    item_total = item.daily_rate * quantity * days
+                    discount_amount = item_total * (discount / 100)
+                    final_item_total = item_total - discount_amount
+                    
                     # Create rental record
                     rental = Rental(
                         customer_id=customer.id,
@@ -488,7 +718,7 @@ class RentalManagerApp:
                         rental_date=start_date,
                         return_date=return_date,
                         daily_rate=item.daily_rate,
-                        total_amount=item.daily_rate * quantity * days
+                        total_amount=final_item_total
                     )
                     
                     db.add(rental)
@@ -515,9 +745,12 @@ class RentalManagerApp:
     
     def clear_rental_form(self):
         """Clear the rental form"""
+        self.customer_selection_var.set("")
         self.customer_name_var.set("")
         self.customer_phone_var.set("")
         self.customer_address_var.set("")
+        self.customer_type_var.set("Regular")
+        self.discount_var.set("0")
         self.item_var.set("")
         self.quantity_var.set("1")
         self.start_date_var.set(date.today().strftime('%Y-%m-%d'))
@@ -528,8 +761,37 @@ class RentalManagerApp:
     
     def refresh_dashboard(self):
         """Refresh dashboard data"""
-        # This would refresh the dashboard tab
-        pass
+        try:
+            db = SessionLocal()
+            
+            # Get total items
+            total_items = db.query(Item).count()
+            
+            # Get total customers
+            total_customers = db.query(Customer).count()
+            
+            # Get active rentals
+            active_rentals = db.query(Rental).filter(Rental.is_returned == False).count()
+            
+            # Get total revenue
+            total_revenue = db.query(Rental).filter(Rental.is_returned == True).with_entities(
+                func.sum(Rental.total_amount)
+            ).scalar() or 0
+            
+            # Update dashboard labels if they exist
+            if hasattr(self, 'total_items_label'):
+                self.total_items_label.config(text=f"Total Items: {total_items}")
+            if hasattr(self, 'total_customers_label'):
+                self.total_customers_label.config(text=f"Total Customers: {total_customers}")
+            if hasattr(self, 'active_rentals_label'):
+                self.active_rentals_label.config(text=f"Active Rentals: {active_rentals}")
+            if hasattr(self, 'total_revenue_label'):
+                self.total_revenue_label.config(text=f"Total Revenue: GHS {total_revenue:.2f}")
+                
+        except Exception as e:
+            print(f"Dashboard refresh error: {e}")
+        finally:
+            db.close()
     
     def refresh_inventory(self):
         """Refresh inventory display"""
@@ -550,32 +812,36 @@ class RentalManagerApp:
                     f"GHS {item.daily_rate:.2f}"
                 ))
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load inventory: {e}")
+            print(f"Inventory refresh error: {e}")
         finally:
-            db.close()
+            if 'db' in locals():
+                db.close()
     
     def refresh_customers(self):
         """Refresh customers display"""
-        # Clear existing customers
-        for customer in self.customers_tree.get_children():
-            self.customers_tree.delete(customer)
-        
-        db = SessionLocal()
         try:
+            # Clear existing customers
+            for customer in self.customers_tree.get_children():
+                self.customers_tree.delete(customer)
+            
+            db = SessionLocal()
             customers = db.query(Customer).all()
             for customer in customers:
                 self.customers_tree.insert('', 'end', values=(
                     customer.id,
                     customer.name,
+                    customer.customer_type,
                     customer.phone or "",
                     customer.email or "",
                     customer.address or "",
+                    f"{customer.discount_percentage}%",
                     customer.created_at.strftime('%Y-%m-%d')
                 ))
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load customers: {e}")
+            print(f"Customer refresh error: {e}")
         finally:
-            db.close()
+            if 'db' in locals():
+                db.close()
     
     def refresh_rentals(self):
         """Refresh rentals display"""
@@ -612,9 +878,10 @@ class RentalManagerApp:
                     f"GHS {group['total_amount']:.2f}"
                 ))
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load rentals: {e}")
+            print(f"Rentals refresh error: {e}")
         finally:
-            db.close()
+            if 'db' in locals():
+                db.close()
     
     def mark_as_returned(self):
         """Mark selected rental as returned"""
@@ -701,6 +968,156 @@ class RentalManagerApp:
         tk.Button(dialog, text="Save", command=save_item).pack(pady=10)
         tk.Button(dialog, text="Cancel", command=dialog.destroy).pack(pady=5)
     
+    def filter_inventory(self, *args):
+        """Filter inventory based on search term"""
+        search_term = self.search_var.get().lower()
+        
+        # Clear existing items
+        for item in self.inventory_tree.get_children():
+            self.inventory_tree.delete(item)
+        
+        db = SessionLocal()
+        try:
+            items = db.query(Item).all()
+            for item in items:
+                # Check if search term matches item name or description
+                if (search_term == "" or 
+                    search_term in item.name.lower() or 
+                    search_term in (item.description or "").lower()):
+                    
+                    self.inventory_tree.insert('', 'end', values=(
+                        item.id,
+                        item.name,
+                        item.description,
+                        item.total_quantity,
+                        item.available_quantity,
+                        f"GHS {item.daily_rate:.2f}"
+                    ))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to filter inventory: {e}")
+        finally:
+            db.close()
+    
+    def clear_search(self):
+        """Clear search and show all items"""
+        self.search_var.set("")
+        self.refresh_inventory()
+    
+    def edit_selected_item(self):
+        """Edit the selected item"""
+        selection = self.inventory_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select an item to edit")
+            return
+        
+        # Get selected item ID
+        item_id = self.inventory_tree.item(selection[0])['values'][0]
+        
+        db = SessionLocal()
+        try:
+            item = db.query(Item).filter(Item.id == item_id).first()
+            if not item:
+                messagebox.showerror("Error", "Item not found")
+                return
+            
+            # Create edit dialog
+            dialog = tk.Toplevel(self.root)
+            dialog.title("Edit Item")
+            dialog.geometry("400x300")
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            # Form fields with current values
+            tk.Label(dialog, text="Item Name:").pack(pady=5)
+            name_var = tk.StringVar(value=item.name)
+            tk.Entry(dialog, textvariable=name_var, width=30).pack(pady=5)
+            
+            tk.Label(dialog, text="Description:").pack(pady=5)
+            desc_var = tk.StringVar(value=item.description or "")
+            tk.Entry(dialog, textvariable=desc_var, width=30).pack(pady=5)
+            
+            tk.Label(dialog, text="Total Quantity:").pack(pady=5)
+            qty_var = tk.StringVar(value=str(item.total_quantity))
+            tk.Spinbox(dialog, from_=0, to=1000, textvariable=qty_var, width=10).pack(pady=5)
+            
+            tk.Label(dialog, text="Available Quantity:").pack(pady=5)
+            avail_var = tk.StringVar(value=str(item.available_quantity))
+            tk.Spinbox(dialog, from_=0, to=1000, textvariable=avail_var, width=10).pack(pady=5)
+            
+            tk.Label(dialog, text="Daily Rate (GHS):").pack(pady=5)
+            rate_var = tk.StringVar(value=str(item.daily_rate))
+            tk.Entry(dialog, textvariable=rate_var, width=15).pack(pady=5)
+            
+            def save_changes():
+                try:
+                    # Update item
+                    item.name = name_var.get()
+                    item.description = desc_var.get()
+                    item.total_quantity = int(qty_var.get())
+                    item.available_quantity = int(avail_var.get())
+                    item.daily_rate = float(rate_var.get())
+                    
+                    db.commit()
+                    messagebox.showinfo("Success", "Item updated successfully")
+                    dialog.destroy()
+                    self.refresh_inventory()
+                    self.load_items()  # Refresh combo box
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to update item: {e}")
+            
+            tk.Button(dialog, text="Save Changes", command=save_changes).pack(pady=10)
+            tk.Button(dialog, text="Cancel", command=dialog.destroy).pack(pady=5)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load item: {e}")
+        finally:
+            db.close()
+    
+    def delete_selected_item(self):
+        """Delete the selected item"""
+        selection = self.inventory_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select an item to delete")
+            return
+        
+        # Get selected item details
+        item_id = self.inventory_tree.item(selection[0])['values'][0]
+        item_name = self.inventory_tree.item(selection[0])['values'][1]
+        
+        # Confirm deletion
+        confirm = messagebox.askyesno("Confirm Delete", 
+                                     f"Are you sure you want to delete '{item_name}'?\n\nThis will also delete all related rental records!")
+        
+        if confirm:
+            db = SessionLocal()
+            try:
+                # Check if item has active rentals
+                active_rentals = db.query(Rental).filter(
+                    Rental.item_id == item_id,
+                    Rental.is_returned == False
+                ).count()
+                
+                if active_rentals > 0:
+                    messagebox.showerror("Error", f"Cannot delete item. It has {active_rentals} active rental(s).\nPlease mark all rentals as returned first.")
+                    return
+                
+                # Delete all rentals for this item first
+                db.query(Rental).filter(Rental.item_id == item_id).delete()
+                
+                # Delete the item
+                db.query(Item).filter(Item.id == item_id).delete()
+                
+                db.commit()
+                messagebox.showinfo("Success", f"Item '{item_name}' deleted successfully")
+                self.refresh_inventory()
+                self.load_items()  # Refresh combo box
+                
+            except Exception as e:
+                db.rollback()
+                messagebox.showerror("Error", f"Failed to delete item: {e}")
+            finally:
+                db.close()
+    
     def refresh_history(self):
         """Refresh rental history display"""
         # Clear existing history
@@ -745,9 +1162,10 @@ class RentalManagerApp:
                     status
                 ))
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load rental history: {e}")
+            print(f"History refresh error: {e}")
         finally:
-            db.close()
+            if 'db' in locals():
+                db.close()
     
     def export_history(self):
         """Export rental history to a text file"""
@@ -812,6 +1230,133 @@ class RentalManagerApp:
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to export history: {e}")
+    
+    def edit_selected_customer(self):
+        """Edit the selected customer"""
+        selection = self.customers_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a customer to edit")
+            return
+        
+        # Get selected customer ID
+        customer_id = self.customers_tree.item(selection[0])['values'][0]
+        
+        db = SessionLocal()
+        try:
+            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            if not customer:
+                messagebox.showerror("Error", "Customer not found")
+                return
+            
+            # Create edit dialog
+            dialog = tk.Toplevel(self.root)
+            dialog.title("Edit Customer")
+            dialog.geometry("500x400")
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            # Form fields with current values
+            tk.Label(dialog, text="Customer Name:").pack(pady=5)
+            name_var = tk.StringVar(value=customer.name)
+            tk.Entry(dialog, textvariable=name_var, width=40).pack(pady=5)
+            
+            tk.Label(dialog, text="Phone:").pack(pady=5)
+            phone_var = tk.StringVar(value=customer.phone or "")
+            tk.Entry(dialog, textvariable=phone_var, width=40).pack(pady=5)
+            
+            tk.Label(dialog, text="Email:").pack(pady=5)
+            email_var = tk.StringVar(value=customer.email or "")
+            tk.Entry(dialog, textvariable=email_var, width=40).pack(pady=5)
+            
+            tk.Label(dialog, text="Address:").pack(pady=5)
+            address_var = tk.StringVar(value=customer.address or "")
+            tk.Entry(dialog, textvariable=address_var, width=40).pack(pady=5)
+            
+            tk.Label(dialog, text="Customer Type:").pack(pady=5)
+            type_var = tk.StringVar(value=customer.customer_type)
+            type_combo = ttk.Combobox(dialog, textvariable=type_var, 
+                                     values=["Regular", "Reseller", "VIP"], width=37, state='readonly')
+            type_combo.pack(pady=5)
+            
+            tk.Label(dialog, text="Discount Percentage:").pack(pady=5)
+            discount_var = tk.StringVar(value=str(customer.discount_percentage))
+            tk.Entry(dialog, textvariable=discount_var, width=40).pack(pady=5)
+            
+            tk.Label(dialog, text="Notes:").pack(pady=5)
+            notes_var = tk.StringVar(value=customer.notes or "")
+            tk.Entry(dialog, textvariable=notes_var, width=40).pack(pady=5)
+            
+            def save_changes():
+                try:
+                    # Update customer
+                    customer.name = name_var.get()
+                    customer.phone = phone_var.get()
+                    customer.email = email_var.get()
+                    customer.address = address_var.get()
+                    customer.customer_type = type_var.get()
+                    customer.discount_percentage = float(discount_var.get())
+                    customer.notes = notes_var.get()
+                    
+                    db.commit()
+                    messagebox.showinfo("Success", "Customer updated successfully")
+                    dialog.destroy()
+                    self.refresh_customers()
+                    self.load_customers()  # Refresh combo box
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to update customer: {e}")
+            
+            tk.Button(dialog, text="Save Changes", command=save_changes).pack(pady=10)
+            tk.Button(dialog, text="Cancel", command=dialog.destroy).pack(pady=5)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load customer: {e}")
+        finally:
+            db.close()
+    
+    def delete_selected_customer(self):
+        """Delete the selected customer"""
+        selection = self.customers_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a customer to delete")
+            return
+        
+        # Get selected customer details
+        customer_id = self.customers_tree.item(selection[0])['values'][0]
+        customer_name = self.customers_tree.item(selection[0])['values'][1]
+        
+        # Confirm deletion
+        confirm = messagebox.askyesno("Confirm Delete", 
+                                     f"Are you sure you want to delete customer '{customer_name}'?\n\nThis will also delete all related rental records!")
+        
+        if confirm:
+            db = SessionLocal()
+            try:
+                # Check if customer has active rentals
+                active_rentals = db.query(Rental).filter(
+                    Rental.customer_id == customer_id,
+                    Rental.is_returned == False
+                ).count()
+                
+                if active_rentals > 0:
+                    messagebox.showerror("Error", f"Cannot delete customer. They have {active_rentals} active rental(s).\nPlease mark all rentals as returned first.")
+                    return
+                
+                # Delete all rentals for this customer first
+                db.query(Rental).filter(Rental.customer_id == customer_id).delete()
+                
+                # Delete the customer
+                db.query(Customer).filter(Customer.id == customer_id).delete()
+                
+                db.commit()
+                messagebox.showinfo("Success", f"Customer '{customer_name}' deleted successfully")
+                self.refresh_customers()
+                self.load_customers()  # Refresh combo box
+                
+            except Exception as e:
+                db.rollback()
+                messagebox.showerror("Error", f"Failed to delete customer: {e}")
+            finally:
+                db.close()
 
 def main():
     """Main function to run the application"""
