@@ -74,3 +74,4 @@ If you prefer a visual interface instead of command line:
 
 **After installing Git, you should be able to use `git pull` successfully!** 🎉
 
+

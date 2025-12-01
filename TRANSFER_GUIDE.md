@@ -217,3 +217,4 @@ If the automated script doesn't work, create the shortcut manually:
 **Need Help?** Check the `README.md` file for more detailed information about the application features and usage.
 
 
+
