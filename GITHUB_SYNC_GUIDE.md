@@ -135,6 +135,23 @@ git clone https://github.com/YOUR_USERNAME/ALYVON-rental.git
 - Make sure you're logged into GitHub
 - Verify the repository exists and you have access
 
+### Issue: "Local changes would be overwritten by merge"
+**Solution**: 
+- Your local files have changes that conflict with GitHub
+- **Option 1 (Recommended)**: Discard local changes to match GitHub:
+  ```cmd
+  git reset --hard HEAD
+  git clean -fd
+  git pull
+  ```
+- **Option 2**: Save your changes temporarily:
+  ```cmd
+  git stash
+  git pull
+  git stash pop
+  ```
+- See `FIX_Git_Conflict.md` for detailed instructions
+
 ### Issue: "Merge conflicts"
 **Solution**: 
 - This happens when both PCs have different changes
