@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from PIL import Image, ImageTk
 import os
+import json
+import shutil
 
 class RentalManagerApp:
     def __init__(self, root):
@@ -119,9 +121,13 @@ class RentalManagerApp:
                 font=("Arial", 12), bg='white')
         self.total_revenue_label.pack(anchor='w', padx=10, pady=5)
             
-        # Refresh button
-        tk.Button(dashboard_frame, text="Refresh Dashboard", 
-                 command=self.refresh_dashboard).pack(pady=10)
+        # Actions
+        actions = tk.Frame(dashboard_frame, bg='white')
+        actions.pack(fill='x', padx=20, pady=10)
+        tk.Button(actions, text="Refresh Dashboard", 
+                 command=self.refresh_dashboard).pack(side='left', padx=5)
+        tk.Button(actions, text="Export Website Feeds", 
+                 command=self.export_web_feeds_button).pack(side='left', padx=5)
     
     def create_rental_tab(self):
         """Create rental management tab with multiple item support"""
@@ -733,6 +739,8 @@ class RentalManagerApp:
                 self.clear_rental_form()
                 self.refresh_inventory()
                 self.refresh_rentals()
+                self.refresh_history()
+                self.export_web_json_feeds()
                 
             except Exception as e:
                 db.rollback()
@@ -913,6 +921,7 @@ class RentalManagerApp:
             self.refresh_rentals()
             self.refresh_inventory()
             self.refresh_history()  # Refresh history to show returned rental
+            self.export_web_json_feeds()
         except Exception as e:
             db.rollback()
             messagebox.showerror("Error", f"Failed to mark rental as returned: {e}")
@@ -1358,11 +1367,91 @@ class RentalManagerApp:
             finally:
                 db.close()
 
+    def export_web_feeds_button(self):
+        """Export JSON feeds and copy logo for the website (dashboard button)."""
+        try:
+            export_web_json_feeds()
+            messagebox.showinfo("Export Complete", "Website feeds exported to web/data/ and logo copied.")
+        except Exception as e:
+            messagebox.showerror("Export Failed", f"Could not export web feeds: {e}")
+
 def main():
     """Main function to run the application"""
     root = tk.Tk()
     app = RentalManagerApp(root)
     root.mainloop()
+
+# ---- Web JSON feeds (read-only site support) ----
+def ensure_web_paths():
+    try:
+        os.makedirs(os.path.join('web','data'), exist_ok=True)
+    except Exception:
+        pass
+
+def build_active_rentals_payload(db):
+    rentals = db.query(Rental).filter(Rental.is_returned == False).all()
+    groups = {}
+    for r in rentals:
+        key = f"{r.customer.name}_{r.rental_date}_{r.return_date}"
+        if key not in groups:
+            groups[key] = {
+                'customer': r.customer.name,
+                'start_date': r.rental_date.isoformat() if r.rental_date else None,
+                'return_date': r.return_date.isoformat() if r.return_date else None,
+                'items': [],
+                'total_amount': 0
+            }
+        groups[key]['items'].append(f"{r.item.name} x{r.quantity}")
+        groups[key]['total_amount'] += float(r.total_amount or 0)
+    return list(groups.values())
+
+def build_history_payload(db):
+    rentals = db.query(Rental).all()
+    groups = {}
+    for r in rentals:
+        key = f"{r.customer.name}_{r.rental_date}_{r.return_date}"
+        if key not in groups:
+            groups[key] = {
+                'customer': r.customer.name,
+                'start_date': r.rental_date.isoformat() if r.rental_date else None,
+                'return_date': r.return_date.isoformat() if r.return_date else None,
+                'items': [],
+                'total_amount': 0,
+                'is_returned': bool(r.is_returned)
+            }
+        groups[key]['items'].append(f"{r.item.name} x{r.quantity}")
+        groups[key]['total_amount'] += float(r.total_amount or 0)
+        # If any rental in the group is active, keep as active; only mark returned if all are returned
+        groups[key]['is_returned'] = groups[key]['is_returned'] and bool(r.is_returned)
+    return list(groups.values())
+
+def export_web_json_feeds():
+    try:
+        ensure_web_paths()
+        db = SessionLocal()
+        active_payload = build_active_rentals_payload(db)
+        history_payload = build_history_payload(db)
+        with open(os.path.join('web','data','active_rentals.json'), 'w', encoding='utf-8') as f:
+            json.dump(active_payload, f, ensure_ascii=False)
+        with open(os.path.join('web','data','rental_history.json'), 'w', encoding='utf-8') as f:
+            json.dump(history_payload, f, ensure_ascii=False)
+        # Copy logo for web branding if present
+        for candidate in ["ALYVON logo.png", "ALYVON logo.jpg", "ALYVON logo.jpeg"]:
+            if os.path.exists(candidate):
+                try:
+                    shutil.copyfile(candidate, os.path.join('web','logo.png'))
+                    break
+                except Exception as _e:
+                    pass
+    except Exception as e:
+        # Non-blocking: don't crash app if export fails
+        print(f"Web feed export error: {e}")
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
 
 if __name__ == "__main__":
     main()

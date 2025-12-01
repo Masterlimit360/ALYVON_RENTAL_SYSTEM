@@ -1,4 +1,5 @@
 @echo off
-cd /d "C:\Users\Kelvin\Desktop\SKJ\APPS\ALYVON rental"
+REM Change to the directory where this batch file is located
+cd /d "%~dp0"
 python rental_manager_improved.py
 pause
