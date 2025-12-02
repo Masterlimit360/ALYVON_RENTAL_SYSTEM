@@ -12,12 +12,30 @@ import os
 import json
 import shutil
 
+# Import receipt and SMS modules
+try:
+    from receipt_generator import ReceiptGenerator
+    from sms_sender import SMSSender
+    from sms_config import get_sms_config, COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS, SMS_ENABLED
+    RECEIPT_AVAILABLE = True
+except ImportError as e:
+    print(f"Receipt/SMS modules not available: {e}")
+    RECEIPT_AVAILABLE = False
+
 class RentalManagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("ALYVON Rental Management System")
-        self.root.geometry("1400x900")
-        self.root.configure(bg='#f0f0f0')
+        self.root.geometry("1400x850")
+        # Ensure window doesn't go below taskbar
+        self.root.update_idletasks()
+        screen_height = self.root.winfo_screenheight()
+        taskbar_height = 50  # Approximate taskbar height
+        max_height = screen_height - taskbar_height - 50
+        if self.root.winfo_height() > max_height:
+            self.root.geometry(f"1400x{max_height}")
+        # Modern color scheme
+        self.root.configure(bg='#f5f7fa')
         
         # Set window icon
         try:
@@ -39,33 +57,33 @@ class RentalManagerApp:
         
     def create_widgets(self):
         """Create the main GUI widgets"""
-        # Header with logo
-        header_frame = tk.Frame(self.root, bg='#2c3e50', height=80)
+        # Modern header with gradient effect
+        header_frame = tk.Frame(self.root, bg='#1a237e', height=90)
         header_frame.pack(fill='x', pady=(0, 10))
         header_frame.pack_propagate(False)
         
         # Try to load and display logo
         try:
             logo_image = Image.open("ALYVON logo.png")
-            logo_image = logo_image.resize((60, 60), Image.Resampling.LANCZOS)
+            logo_image = logo_image.resize((65, 65), Image.Resampling.LANCZOS)
             self.logo_photo = ImageTk.PhotoImage(logo_image)
-            logo_label = tk.Label(header_frame, image=self.logo_photo, bg='#2c3e50')
-            logo_label.pack(side='left', padx=10, pady=10)
+            logo_label = tk.Label(header_frame, image=self.logo_photo, bg='#1a237e')
+            logo_label.pack(side='left', padx=15, pady=12)
         except:
             # If logo fails to load, just show text
-            logo_label = tk.Label(header_frame, text="ALYVON", font=("Arial", 16, "bold"), 
-                                fg='white', bg='#2c3e50')
-            logo_label.pack(side='left', padx=10, pady=10)
+            logo_label = tk.Label(header_frame, text="ALYVON", font=("Segoe UI", 18, "bold"), 
+                                fg='white', bg='#1a237e')
+            logo_label.pack(side='left', padx=15, pady=12)
         
-        # Title
+        # Title with better styling
         title_label = tk.Label(header_frame, text="Rental Management System", 
-                              font=("Arial", 16, "bold"), fg='white', bg='#2c3e50')
-        title_label.pack(side='left', padx=20, pady=10)
+                              font=("Segoe UI", 18, "bold"), fg='white', bg='#1a237e')
+        title_label.pack(side='left', padx=25, pady=12)
         
-        # Currency label
+        # Currency label with modern styling
         currency_label = tk.Label(header_frame, text="Currency: Ghana Cedis (GHS)", 
-                                font=("Arial", 10), fg='#ecf0f1', bg='#2c3e50')
-        currency_label.pack(side='right', padx=20, pady=10)
+                                font=("Segoe UI", 10), fg='#e3f2fd', bg='#1a237e')
+        currency_label.pack(side='right', padx=25, pady=12)
         
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.root)
@@ -96,13 +114,17 @@ class RentalManagerApp:
         dashboard_frame = ttk.Frame(self.notebook)
         self.notebook.add(dashboard_frame, text="Dashboard")
         
-        # Dashboard content
-        tk.Label(dashboard_frame, text="Rental System Overview", 
-                font=("Arial", 14, "bold")).pack(pady=10)
+        # Dashboard content with modern styling
+        title_label = tk.Label(dashboard_frame, text="Rental System Overview", 
+                font=("Segoe UI", 16, "bold"), fg='#1a237e', bg='#f5f7fa')
+        title_label.pack(pady=15)
         
-        # Summary frame
-        summary_frame = tk.Frame(dashboard_frame, bg='white', relief='raised', bd=2)
+        # Summary frame with modern card design
+        summary_frame = tk.Frame(dashboard_frame, bg='white', relief='flat', bd=0)
         summary_frame.pack(fill='x', padx=20, pady=10)
+        # Add subtle border effect
+        border_frame = tk.Frame(summary_frame, bg='#e0e0e0', height=1)
+        border_frame.pack(fill='x', side='bottom')
         
         # Create summary labels as instance variables for refresh
         self.total_items_label = tk.Label(summary_frame, text="Total Items: 0", 
@@ -121,27 +143,70 @@ class RentalManagerApp:
                 font=("Arial", 12), bg='white')
         self.total_revenue_label.pack(anchor='w', padx=10, pady=5)
             
-        # Actions
-        actions = tk.Frame(dashboard_frame, bg='white')
-        actions.pack(fill='x', padx=20, pady=10)
-        tk.Button(actions, text="Refresh Dashboard", 
-                 command=self.refresh_dashboard).pack(side='left', padx=5)
-        tk.Button(actions, text="Export Website Feeds", 
-                 command=self.export_web_feeds_button).pack(side='left', padx=5)
+        # Actions with modern button styling
+        actions = tk.Frame(dashboard_frame, bg='#f5f7fa')
+        actions.pack(fill='x', padx=20, pady=15)
+        
+        refresh_btn = tk.Button(actions, text="🔄 Refresh Dashboard", 
+                 command=self.refresh_dashboard, 
+                 bg='#2196F3', fg='white', font=("Segoe UI", 10, "bold"),
+                 relief='flat', padx=15, pady=8, cursor='hand2',
+                 activebackground='#1976D2', activeforeground='white')
+        refresh_btn.pack(side='left', padx=5)
+        
+        export_btn = tk.Button(actions, text="📤 Export Website Feeds", 
+                 command=self.export_web_feeds_button,
+                 bg='#4CAF50', fg='white', font=("Segoe UI", 10, "bold"),
+                 relief='flat', padx=15, pady=8, cursor='hand2',
+                 activebackground='#388E3C', activeforeground='white')
+        export_btn.pack(side='left', padx=5)
     
     def create_rental_tab(self):
         """Create rental management tab with multiple item support"""
+        # Create main container frame
         rental_frame = ttk.Frame(self.notebook)
         self.notebook.add(rental_frame, text="New Rental")
         
+        # Create scrollable canvas
+        canvas = tk.Canvas(rental_frame, bg='#f5f7fa', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(rental_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mousewheel to canvas (Windows and Linux)
+        def _on_mousewheel(event):
+            if event.num == 4 or event.delta > 0:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5 or event.delta < 0:
+                canvas.yview_scroll(1, "units")
+        # Windows
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Linux
+        canvas.bind_all("<Button-4>", _on_mousewheel)
+        canvas.bind_all("<Button-5>", _on_mousewheel)
+        
+        # Use scrollable_frame instead of rental_frame for all content
+        rental_content = scrollable_frame
+        
         # Customer selection
-        customer_frame = tk.LabelFrame(rental_frame, text="Customer Information", 
+        customer_frame = tk.LabelFrame(rental_content, text="Customer Information", 
                                      font=("Arial", 12, "bold"))
-        customer_frame.pack(fill='x', padx=10, pady=5)
+        customer_frame.pack(fill='x', padx=10, pady=3)
         
         # Customer selection method
         selection_frame = tk.Frame(customer_frame)
-        selection_frame.pack(fill='x', padx=5, pady=5)
+        selection_frame.pack(fill='x', padx=5, pady=3)
         
         tk.Label(selection_frame, text="Select Customer:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
         self.customer_selection_var = tk.StringVar()
@@ -182,13 +247,13 @@ class RentalManagerApp:
         self.discount_var.trace('w', self.calculate_total)
         
         # Item selection for multiple items
-        item_frame = tk.LabelFrame(rental_frame, text="Add Items to Rental", 
+        item_frame = tk.LabelFrame(rental_content, text="Add Items to Rental", 
                                  font=("Arial", 12, "bold"))
-        item_frame.pack(fill='x', padx=10, pady=5)
+        item_frame.pack(fill='x', padx=10, pady=3)
         
         # Item selection controls
         controls_frame = tk.Frame(item_frame)
-        controls_frame.pack(fill='x', padx=5, pady=5)
+        controls_frame.pack(fill='x', padx=5, pady=3)
         
         tk.Label(controls_frame, text="Item:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
         self.item_var = tk.StringVar()
@@ -220,11 +285,11 @@ class RentalManagerApp:
                  bg='#e74c3c', fg='white').pack(pady=5)
         
         # Rental period
-        period_frame = tk.LabelFrame(rental_frame, text="Rental Period", 
+        period_frame = tk.LabelFrame(rental_content, text="Rental Period", 
                                    font=("Arial", 12, "bold"))
-        period_frame.pack(fill='x', padx=10, pady=5)
+        period_frame.pack(fill='x', padx=10, pady=3)
         
-        tk.Label(period_frame, text="Start Date:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
+        tk.Label(period_frame, text="Start Date:").grid(row=0, column=0, sticky='w', padx=5, pady=3)
         self.start_date_var = tk.StringVar(value=date.today().strftime('%Y-%m-%d'))
         tk.Entry(period_frame, textvariable=self.start_date_var, width=15).grid(row=0, column=1, padx=5, pady=5)
         
@@ -234,23 +299,72 @@ class RentalManagerApp:
         self.days_var.trace('w', self.calculate_total)
         
         # Pricing
-        pricing_frame = tk.LabelFrame(rental_frame, text="Pricing (Ghana Cedis)", 
+        pricing_frame = tk.LabelFrame(rental_content, text="Pricing (Ghana Cedis)", 
                                     font=("Arial", 12, "bold"))
-        pricing_frame.pack(fill='x', padx=10, pady=5)
+        pricing_frame.pack(fill='x', padx=10, pady=3)
         
-        tk.Label(pricing_frame, text="Total Amount:").grid(row=0, column=0, sticky='w', padx=5, pady=5)
+        tk.Label(pricing_frame, text="Total Amount:").grid(row=0, column=0, sticky='w', padx=5, pady=3)
         self.total_amount_var = tk.StringVar()
         tk.Label(pricing_frame, textvariable=self.total_amount_var, font=("Arial", 14, "bold"), 
                 fg='green').grid(row=0, column=1, padx=5, pady=5)
         
-        # Buttons
-        button_frame = tk.Frame(rental_frame)
-        button_frame.pack(fill='x', padx=10, pady=10)
+        # Receipt and SMS options with modern styling
+        options_frame = tk.LabelFrame(rental_content, text="📄 Receipt Options", 
+                                     font=("Segoe UI", 11, "bold"), fg='#1a237e',
+                                     bg='white', relief='flat', bd=1)
+        options_frame.pack(fill='x', padx=10, pady=8)
         
-        tk.Button(button_frame, text="Create Rental", command=self.create_rental, 
-                 bg='#27ae60', fg='white', font=("Arial", 12, "bold")).pack(side='left', padx=5)
-        tk.Button(button_frame, text="Clear Form", command=self.clear_rental_form, 
-                 bg='#e74c3c', fg='white', font=("Arial", 12, "bold")).pack(side='left', padx=5)
+        options_inner = tk.Frame(options_frame, bg='white')
+        options_inner.pack(fill='x', padx=10, pady=8)
+        
+        self.generate_receipt_var = tk.BooleanVar(value=True)
+        receipt_cb = tk.Checkbutton(options_inner, text="📋 Generate PDF Receipt", 
+                      variable=self.generate_receipt_var, 
+                      font=("Segoe UI", 10), bg='white',
+                      activebackground='white', selectcolor='white',
+                      fg='#424242')
+        receipt_cb.pack(side='left', padx=15, pady=5)
+        
+        self.send_sms_var = tk.BooleanVar(value=False)
+        sms_cb = tk.Checkbutton(options_inner, text="📱 Send Receipt via SMS", 
+                      variable=self.send_sms_var, 
+                      font=("Segoe UI", 10), bg='white',
+                      activebackground='white', selectcolor='white',
+                      fg='#424242')
+        sms_cb.pack(side='left', padx=15, pady=5)
+        
+        # Show SMS status
+        try:
+            if not SMS_ENABLED:
+                sms_status = tk.Label(options_inner, text="(SMS disabled - configure in sms_config.py)", 
+                                    font=("Segoe UI", 8), fg='#757575', bg='white')
+                sms_status.pack(side='left', padx=10)
+        except:
+            pass  # SMS_ENABLED might not be defined
+        
+        # Buttons - Fixed at bottom of scrollable area with better spacing
+        button_frame = tk.Frame(rental_content, bg='#f5f7fa')
+        button_frame.pack(fill='x', padx=10, pady=(15, 20))
+        
+        # Add separator line above buttons
+        separator = tk.Frame(button_frame, height=2, bg='#e0e0e0')
+        separator.pack(fill='x', pady=(0, 15))
+        
+        # Button container with center alignment
+        btn_container = tk.Frame(button_frame, bg='#f5f7fa')
+        btn_container.pack(expand=True)
+        
+        create_btn = tk.Button(btn_container, text="✅ Create Rental", command=self.create_rental, 
+                 bg='#4CAF50', fg='white', font=("Segoe UI", 12, "bold"),
+                 relief='flat', padx=25, pady=12, cursor='hand2',
+                 activebackground='#388E3C', activeforeground='white')
+        create_btn.pack(side='left', padx=8)
+        
+        clear_btn = tk.Button(btn_container, text="🗑️ Clear Form", command=self.clear_rental_form, 
+                 bg='#f44336', fg='white', font=("Segoe UI", 12, "bold"),
+                 relief='flat', padx=25, pady=12, cursor='hand2',
+                 activebackground='#d32f2f', activeforeground='white')
+        clear_btn.pack(side='left', padx=8)
         
         # Load items and customers
         self.load_items()
@@ -735,11 +849,69 @@ class RentalManagerApp:
                 
                 db.commit()
                 
-                messagebox.showinfo("Success", f"Rental created successfully!\nTotal Amount: GHS {total_amount:.2f}")
+                # Get the first rental ID for receipt (they all share the same customer/date)
+                first_rental = db.query(Rental).filter(
+                    Rental.customer_id == customer.id,
+                    Rental.rental_date == start_date
+                ).first()
+                
+                rental_id = first_rental.id if first_rental else "N/A"
+                
+                # Generate receipt and send SMS if requested
+                receipt_path = None
+                sms_sent = False
+                sms_message = ""
+                
+                if RECEIPT_AVAILABLE and self.generate_receipt_var.get():
+                    try:
+                        receipt_path = self.generate_receipt(
+                            rental_id=rental_id,
+                            customer=customer,
+                            rental_items=self.rental_items,
+                            start_date=start_date,
+                            return_date=return_date,
+                            days=days,
+                            discount=discount,
+                            total_amount=total_amount
+                        )
+                    except Exception as e:
+                        print(f"Receipt generation error: {e}")
+                        receipt_path = None
+                
+                if RECEIPT_AVAILABLE and self.send_sms_var.get() and customer.phone:
+                    if SMS_ENABLED:
+                        try:
+                            sms_result = self.send_receipt_sms(
+                                customer.phone,
+                                customer.name,
+                                rental_id,
+                                total_amount,
+                                return_date.strftime('%Y-%m-%d'),
+                                receipt_path
+                            )
+                            sms_sent = sms_result.get('success', False)
+                            sms_message = sms_result.get('message', '')
+                        except Exception as e:
+                            print(f"SMS sending error: {e}")
+                            sms_message = f"SMS error: {str(e)}"
+                    else:
+                        sms_message = "SMS is disabled. Configure SMS gateway in sms_config.py"
+                
+                # Success message
+                success_msg = f"Rental created successfully!\nTotal Amount: GHS {total_amount:.2f}"
+                if receipt_path:
+                    success_msg += f"\n\nReceipt saved: {receipt_path}"
+                if sms_sent:
+                    success_msg += f"\n\nSMS sent successfully!"
+                elif self.send_sms_var.get() and sms_message:
+                    success_msg += f"\n\nSMS: {sms_message}"
+                
+                messagebox.showinfo("Success", success_msg)
                 self.clear_rental_form()
                 self.refresh_inventory()
                 self.refresh_rentals()
                 self.refresh_history()
+                self.refresh_dashboard()
                 self.export_web_json_feeds()
                 
             except Exception as e:
@@ -766,6 +938,11 @@ class RentalManagerApp:
         self.total_amount_var.set("GHS 0.00")
         self.rental_items = []
         self.update_rental_items_display()
+        # Reset receipt options
+        if hasattr(self, 'generate_receipt_var'):
+            self.generate_receipt_var.set(True)
+        if hasattr(self, 'send_sms_var'):
+            self.send_sms_var.set(False)
     
     def refresh_dashboard(self):
         """Refresh dashboard data"""
@@ -1366,6 +1543,90 @@ class RentalManagerApp:
                 messagebox.showerror("Error", f"Failed to delete customer: {e}")
             finally:
                 db.close()
+
+    def generate_receipt(self, rental_id, customer, rental_items, start_date, return_date, days, discount, total_amount):
+        """Generate PDF receipt for a rental"""
+        if not RECEIPT_AVAILABLE:
+            return None
+        
+        try:
+            generator = ReceiptGenerator(
+                company_name=COMPANY_NAME,
+                company_phone=COMPANY_PHONE,
+                company_email=COMPANY_EMAIL,
+                company_address=COMPANY_ADDRESS
+            )
+            
+            # Prepare items data
+            items_data = []
+            subtotal = 0
+            for rental_item in rental_items:
+                item = rental_item['item']
+                quantity = rental_item['quantity']
+                item_subtotal = item.daily_rate * quantity * days
+                subtotal += item_subtotal
+                
+                items_data.append({
+                    'name': item.name,
+                    'quantity': quantity,
+                    'daily_rate': item.daily_rate,
+                    'days': days,
+                    'subtotal': item_subtotal
+                })
+            
+            discount_amount = subtotal * (discount / 100)
+            
+            rental_data = {
+                'rental_id': rental_id,
+                'customer_name': customer.name,
+                'customer_phone': customer.phone or '',
+                'customer_address': customer.address or '',
+                'rental_date': start_date.strftime('%B %d, %Y') if isinstance(start_date, date) else str(start_date),
+                'return_date': return_date.strftime('%B %d, %Y') if isinstance(return_date, date) else str(return_date),
+                'items': items_data,
+                'subtotal': subtotal,
+                'discount_percent': discount,
+                'discount_amount': discount_amount,
+                'total_amount': total_amount,
+                'currency': 'GHS'
+            }
+            
+            receipt_path = generator.generate_receipt(rental_data)
+            return receipt_path
+        except Exception as e:
+            print(f"Receipt generation error: {e}")
+            return None
+    
+    def send_receipt_sms(self, phone_number, customer_name, rental_id, total_amount, return_date, receipt_path=None):
+        """Send receipt notification via SMS"""
+        if not RECEIPT_AVAILABLE:
+            return {'success': False, 'message': 'SMS module not available'}
+        
+        try:
+            # Configure SMS sender
+            sms_config = get_sms_config()
+            sender = SMSSender()
+            sender.gateway = sms_config['gateway']
+            sender.api_key = sms_config['api_key']
+            sender.api_secret = sms_config['api_secret']
+            sender.sender_id = sms_config['sender_id']
+            
+            if sender.gateway == 'disabled':
+                return {'success': False, 'message': 'SMS is disabled. Configure SMS gateway in sms_config.py'}
+            
+            # Send SMS
+            result = sender.send_receipt_notification(
+                phone_number=phone_number,
+                customer_name=customer_name,
+                rental_id=str(rental_id),
+                total_amount=float(total_amount),
+                return_date=return_date,
+                currency='GHS'
+            )
+            
+            return result
+        except Exception as e:
+            return {'success': False, 'message': f'Error sending SMS: {str(e)}'}
 
     def export_web_feeds_button(self):
         """Export JSON feeds and copy logo for the website (dashboard button)."""
