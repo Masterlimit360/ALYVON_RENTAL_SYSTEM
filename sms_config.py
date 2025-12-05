@@ -1,14 +1,23 @@
 """
 SMS Configuration for ALYVON Rental Management System
 Update these settings based on your SMS gateway provider
+
+IMPORTANT: Credentials should be set via .env file or environment variables.
+See .env.example for template.
 """
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # SMS Gateway Configuration
 # Options: 'twilio', 'africastalking', 'smsgh', 'custom', 'disabled'
-SMS_GATEWAY = os.getenv('SMS_GATEWAY', 'disabled')  # Set to 'disabled' to turn off SMS
+# IMPORTANT: Set credentials via .env file or environment variables (see .env.example)
+SMS_GATEWAY = os.getenv('SMS_GATEWAY', 'twilio')  # Set to 'disabled' to turn off SMS
 
 # Twilio Configuration (if using Twilio)
+# Load from .env file - DO NOT put credentials directly in this file!
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', '')  # Your Twilio phone number
@@ -74,4 +83,5 @@ def get_sms_config():
             'api_secret': '',
             'sender_id': SMS_SENDER_ID
         }
+
 

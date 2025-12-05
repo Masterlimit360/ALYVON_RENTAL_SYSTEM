@@ -49,8 +49,15 @@ desktop.ini
 # Logs
 *.log
 
-# Environment variables
+# Environment variables and secrets
 .env
 .env.local
+.env.*
+!.env.example
+
+# Sensitive configuration files (if you add secrets directly)
+# Uncomment if you want to ignore sms_config.py entirely:
+# sms_config.py
+
 
 
